@@ -1,46 +1,65 @@
-# 🇮🇳 Indian Options Backtesting System
+🦅 Options Trading Backtesting Framework
+A modular and extensible backtesting framework for Options Trading in Python. Supports advanced strategies like Long Straddle, Long Strangle, Bull Call Spread, Bear Put Spread, and custom user-defined strategies — complete with PnL analytics, ML-based performance prediction, and risk metrics.
+🚀 Features
+✅ Fetches NSE/BSE data automatically
+✅ Implements 5 popular option strategies
+✅ Simulates positional, intraday, and swing modes
+✅ Calculates key performance metrics: Cumulative PnL, Max Drawdown, Sharpe & Sortino Ratios, Win Rate
+✅ Machine Learning–based direction prediction
+✅ Beautiful tabular summaries and graphs
+🧩 Example Usage
+from strategies.bull_call_spread import BullCallSpread
+from utils.data_fetcher import get_index_data
+from utils.metrics import backtest_strategy
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen)
-![NSE](https://img.shields.io/badge/Data-NSE%20%26%20BSE-orange)
+data = get_index_data("^NSEI", "2024-01-01", "2024-12-31")
+strategy = BullCallSpread(buy_call_premium=120, sell_call_premium=80)
 
-A **comprehensive Python-based backtesting framework** for Indian stock index options such as **NIFTY**, **BANKNIFTY**, **FINNIFTY**, **SENSEX**, and others.  
-It allows traders and analysts to simulate **Call/Put option strategies** with custom parameters like **Stop Loss**, **Target Profit**, and **Lot Size**, and evaluate the strategy’s performance over any historical period.
+results, metrics = backtest_strategy(
+    strategy, data, lot_size=50, premium=100,
+    stop_loss_pct=0.1, target_profit_pct=0.2,
+    trading_type="positional"
+)
+📈 Output Example
+📊 Performance Metrics
+╒════════════════════╤════════════╕
+│ Metric             │ Value      │
+╞════════════════════╪════════════╡
+│ Final PnL (₹)      │ 12,500.00  │
+│ Max Drawdown (₹)   │ 3,200.00   │
+│ Sharpe Ratio       │ 1.42       │
+│ Sortino Ratio      │ 1.85       │
+│ Win Rate (%)       │ 61.23      │
+╘════════════════════╧════════════╛
+🤖 Machine Learning Integration
+from utils.ml_evaluator import evaluate_with_ml
+from tabulate import tabulate
 
----
-
-## 🧩 Features
-
-- 📈 Fetches **historical index data** directly from **NSE** and **BSE**  
-- ⚙️ Supports **Intraday**, **Positional**, and **Swing** trading strategies  
-- 💰 Calculates key performance metrics:
-  - Final Cumulative PnL  
-  - Maximum Drawdown  
-  - Sharpe Ratio  
-  - Sortino Ratio  
-  - Win Rate  
-  - Monthly PnL Report  
-- 📊 Generates PnL performance plots  
-- 🧾 Exports results as CSV files  
-- 🕒 Validates trading days (skips weekends/holidays)
-
----
-
-## 🧠 Functions Overview
-
-| Function | Description |
-|-----------|--------------|
-| `get_index_data()` | Fetches and cleans index historical data (NSE/BSE). |
-| `option_backtest()` | Runs option strategy backtests and computes risk metrics. |
-| `is_market_day()` | Checks whether a specific date is a valid market trading day. |
-| `main()` | Provides an interactive CLI for user inputs and backtest execution. |
-
----
-
-## 🚀 Usage
-
-### 🔧 Prerequisites
-Make sure you have the required Python packages installed:
-```bash
-pip install nsepython bse pandas numpy matplotlib
+ml_results = evaluate_with_ml(results)
+print(tabulate(ml_results, headers="keys", tablefmt="fancy_grid"))
+Predicts the next-day direction of profit/loss using models like Random Forest, SVM, Logistic Regression, Neural Network (MLP), KNN, Decision Tree, Naive Bayes, and Gradient Boosting.
+⚙️ Installation
+git clone https://github.com/<your-username>/options-backtesting-framework.git
+cd options-backtesting-framework
+pip install -r requirements.txt
+🧠 Dependencies
+pandas
+numpy
+matplotlib
+scikit-learn
+tabulate
+nsepython
+bse
+📜 License
+MIT License © Rohit Baskaran
+💡 Author
+👤 Rohit Baskaran
+💼 CSE Student | Interested in Trading, Stock Market & AI
+📧 rohitbaskaran369@gmail.com
+🌙 GitHub: https://github.com/rohit0369
+🏁 Next Steps (Optional Add-Ons)
+☑️ Add visualization dashboards using Plotly
+☑️ Integrate live NSE option chain API
+☑️ Add Paper-Trading mode
+☑️ Connect with Zerodha Kite or Angel One SmartAPI
+☑️ Deploy via Streamlit or Flask for web interface
