@@ -108,7 +108,7 @@ MIT License © [Rohit Baskaran](https://github.com/rohit0369)
 
 👤 **Rohit Baskaran**  
 💼 CSE Student | Interested in Trading, Stock Market & AI  
-📧 rohitbaskaran369@gmail.com  
+📧 brohitbaskaran@gmail.com  
 🌙 GitHub: [rohit0369](https://github.com/rohit0369)
 
 ---
