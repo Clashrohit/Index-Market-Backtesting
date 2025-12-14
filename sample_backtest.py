@@ -1,35 +1,3 @@
-
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-import requests
-requests.packages.urllib3.disable_warnings()
-
-# Monkey patch requests to disable SSL verification
-original_get = requests.get
-def patched_get(url, **kwargs):
-    kwargs.setdefault('verify', False)
-    return original_get(url, **kwargs)
-requests.get = patched_get
-
-original_post = requests.post
-def patched_post(url, **kwargs):
-    kwargs.setdefault('verify', False)
-    return original_post(url, **kwargs)
-requests.post = patched_post
-
-# Monkey patch urllib.request to disable SSL verification
-import urllib.request
-original_urlopen = urllib.request.urlopen
-def patched_urlopen(url, **kwargs):
-    if 'context' not in kwargs:
-        kwargs['context'] = ssl._create_unverified_context()
-    return original_urlopen(url, **kwargs)
-urllib.request.urlopen = patched_urlopen
-
 from nsepython import index_history
 from bse import BSE
 import pandas as pd
@@ -52,10 +20,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
 
-
-# ------------------------------
-# FUNCTION: FORMAT CURRENCY
-# ------------------------------
 def format_currency(value):
     """
     Format currency value to indicate lakhs (L), crores (Cr), or rupees (₹).
@@ -67,11 +31,7 @@ def format_currency(value):
     else:
         return f"₹{value:.2f}"
 
-# Define bse_index_history using BSE class
 bse_index_history = lambda index_name, start_date, end_date: BSE(download_folder=os.getcwd()).fetchHistoricalIndexData(index_name, start_date, end_date)
-
-
-
 
 class Strategy(abc.ABC):
     """
@@ -102,48 +62,26 @@ class LongStraddle(Strategy):
     """
     Long Straddle strategy: Buy call and put at the same strike.
     """
-    def __init__(self, call_premium, put_premium):
+    def __init__(self, call_premium, put_premium, strike=None, expiry_days=30):
         super().__init__("Long Straddle")
         self.call_premium = call_premium
         self.put_premium = put_premium
         self.net_premium = call_premium + put_premium  # Cost to enter
+        self.strike = strike  # If None, use ATM (close price)
+        self.expiry_days = expiry_days  # For time decay considerations
 
     def get_signals(self, data):
         # Always long straddle: signal 1
         return pd.Series(1, index=data.index)
 
     def calculate_pnl(self, data, signals, lot_size, premium, stop_loss_pct, target_profit_pct, trading_type):
-        # For straddle, premium is net_premium
-        # PnL = (max(index - strike, 0) - call_prem) + (max(strike - index, 0) - put_prem) - net_prem
-        # But since strike is not defined, assume ATM, and use close as index.
-        # Simplified: profit if |change| > net_prem
-        # But to fit existing logic, treat as a single leg with net_premium, but adjust for direction.
-        # For simplicity, use the existing option_backtest logic but with option_type='straddle'
-        # Since it's multi-leg, need custom logic.
         print(f"\n⚙️ Running {self.name} Strategy ({trading_type.upper()}) with Stop Loss ({stop_loss_pct*100:.1f}%) and Target Profit ({target_profit_pct*100:.1f}%)...")
 
-        # Assume strike is current close at start, but for simplicity, use the existing logic with net_premium and signal 1
-        # Straddle profits from volatility, so PnL based on |change| - net_prem
-        # But to integrate, perhaps modify the logic.
-
-        # For positional, intraday, swing, calculate based on signals.
-        # Since signals are 1, it's long.
-        # But for straddle, it's not directional.
-
-        # Simplified: treat as long call with premium = net_premium, but adjust for put part.
-        # This is approximate.
-
-        # Better: calculate intrinsic value change.
-        # Assume strike = data['Close'].iloc[0]
-        strike = data['Close'].iloc[0]
+        strike = self.strike if self.strike is not None else data['Close'].iloc[0]
         data['Intrinsic_Value'] = data['Close'].apply(lambda x: max(x - strike, 0) + max(strike - x, 0))
         data['PnL'] = data['Intrinsic_Value'] - self.net_premium
         data['Cumulative_PnL'] = data['PnL'].cumsum()
 
-        # Apply stop loss and target profit based on cumulative PnL change.
-        # This is basic; for full integration, need to adapt the trading_type logic.
-
-        # For now, return data with Cumulative_PnL
         return data
 
 
@@ -176,7 +114,8 @@ class BearPutSpread(Strategy):
         higher_strike = strike + spread_width
         lower_strike = strike - spread_width
 
-        data['Intrinsic_Value'] = data['Close'].apply(lambda x: min(max(higher_strike - x, 0), spread_width))
+        # Vectorized calculation for bear put spread intrinsic value
+        data['Intrinsic_Value'] = np.minimum(np.maximum(higher_strike - data['Close'], 0), spread_width)
         data['PnL'] = data['Intrinsic_Value'] - self.net_premium
         data['Cumulative_PnL'] = data['PnL'].cumsum()
 
@@ -200,9 +139,8 @@ class LongStrangle(Strategy):
     def calculate_pnl(self, data, signals, lot_size, premium, stop_loss_pct, target_profit_pct, trading_type):
         print(f"\n⚙️ Running {self.name} Strategy ({trading_type.upper()}) with Stop Loss ({stop_loss_pct*100:.1f}%) and Target Profit ({target_profit_pct*100:.1f}%)...")
 
-        # Assume call_strike = close + spread, put_strike = close - spread
         strike = data['Close'].iloc[0]
-        spread = 100  # assume
+        spread = 100
         call_strike = strike + spread
         put_strike = strike - spread
 
@@ -305,7 +243,6 @@ class CustomStrategy(Strategy):
                 data['Signal'] = 1
             else:
                 data['Signal'] = -1
-            # Initialize
             data['Option_PnL'] = 0.0
             cumulative_pnl = []
             in_trade = False
@@ -338,7 +275,6 @@ class CustomStrategy(Strategy):
             data['Option_PnL'] = 0.0
             cumulative_pnl = []
             in_trade = False
-            
             entry_price = 0.0
             total_pnl = 0.0
             hold_days = 5
@@ -512,13 +448,13 @@ def get_index_data(symbol, start, end, interval="1d"):
                 data = pd.read_csv(csv_path)
             except Exception as e:
                 print(f"Error fetching BSE data: {e}")
-                data = pd.DataFrame()
+                raise ValueError(f"Failed to fetch BSE data for {symbol}: {e}")
         else:
             try:
                 data = index_history(index_name, start_str, end_str)
             except Exception as e:
                 print(f"Error fetching NSE data: {e}")
-                data = pd.DataFrame()
+                raise ValueError(f"Failed to fetch NSE data for {symbol}: {e}")
         if not data.empty:
             data = data.rename(columns={'OPEN': 'Open', 'HIGH': 'High', 'LOW': 'Low', 'CLOSE': 'Close', 'HistoricalDate': 'Date'})
             data['Date'] = pd.to_datetime(data['Date'], format='%d %b %Y')
@@ -574,13 +510,11 @@ def option_backtest(data, option_type, lot_size, premium, stop_loss_pct, target_
         cumulative_pnl[exit_index:] = [total_pnl] * len(cumulative_pnl[exit_index:])
         data['Cumulative_PnL'] = cumulative_pnl
     elif trading_type == 'intraday':
-        # Intraday: entry every day
         data['Return'] = data['Close'].pct_change()
         if option_type == "call":
             data['Signal'] = 1
         else:
             data['Signal'] = -1
-        # Initialize
         data['Option_PnL'] = 0.0
         cumulative_pnl = []
         in_trade = False
@@ -588,30 +522,24 @@ def option_backtest(data, option_type, lot_size, premium, stop_loss_pct, target_
         total_pnl = 0.0
         for i in range(1, len(data)):
             if not in_trade:
-                # Enter trade daily
                 in_trade = True
                 entry_price = data['Close'].iloc[i]
                 entry_signal = data['Signal'].iloc[i]
             elif in_trade:
-                # Calculate change since entry
                 price_change = (data['Close'].iloc[i] - entry_price) / entry_price
                 if option_type == "put":
                     price_change = -price_change
                 pnl = price_change * premium * lot_size
                 total_pnl += pnl
-                # Target Profit
                 if price_change >= target_profit_pct:
-                    in_trade = False  # exit trade
-                # Stop Loss
+                    in_trade = False
                 elif price_change <= -stop_loss_pct:
                     total_pnl -= stop_loss_pct * premium * lot_size
-                    in_trade = False  # exit trade
+                    in_trade = False
             cumulative_pnl.append(total_pnl)
-        # Fill first row
         cumulative_pnl = [0] + cumulative_pnl
         data['Cumulative_PnL'] = cumulative_pnl
     elif trading_type == 'swing':
-        # Swing: enter every 5 days, hold until stop loss or 5 days
         data['Return'] = data['Close'].pct_change()
         if option_type == "call":
             data['Signal'] = 1
@@ -626,28 +554,23 @@ def option_backtest(data, option_type, lot_size, premium, stop_loss_pct, target_
         trade_start = 0
         for i in range(1, len(data)):
             if not in_trade or (i - trade_start) >= hold_days:
-                # Enter trade every 5 days or after exit
                 in_trade = True
                 entry_price = data['Close'].iloc[i]
                 entry_signal = data['Signal'].iloc[i]
                 trade_start = i
                 total_pnl = 0.0
             else:
-                # Calculate change since entry
                 price_change = (data['Close'].iloc[i] - entry_price) / entry_price
                 if option_type == "put":
                     price_change = -price_change
                 pnl = price_change * premium * lot_size
                 total_pnl += pnl
-                # Target Profit
                 if price_change >= target_profit_pct:
-                    in_trade = False  # exit trade
-                # Stop Loss
+                    in_trade = False
                 elif price_change <= -stop_loss_pct:
                     total_pnl -= stop_loss_pct * premium * lot_size
-                    in_trade = False  # exit trade
+                    in_trade = False
             cumulative_pnl.append(total_pnl)
-        # Fill first row
         cumulative_pnl = [0] + cumulative_pnl
         data['Cumulative_PnL'] = cumulative_pnl
 
